@@ -24,6 +24,12 @@ cmd_doctor() {
   disk_summary
   warn_low_disk || true
   echo ""
+  if command -v act >/dev/null 2>&1; then
+    echo "act: $(act --version 2>/dev/null | head -1)"
+  else
+    echo "act: NOT INSTALLED (brew install act) — run-pr falls back to shell profiles"
+  fi
+  echo ""
   echo "Images:"
   docker images --format '  {{.Repository}}:{{.Tag}}\t{{.Size}}' 2>/dev/null | grep -E "^  ${LI_LOCAL_CI_IMAGE_PREFIX}/" || echo "  (none — run ./scripts/build-images.sh)"
 }

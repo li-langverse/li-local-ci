@@ -1,0 +1,27 @@
+{
+  "_comment": "Default workflows for merge-local CI when auto-discovery is ambiguous. event = act event name.",
+  "lic": {
+    "workflows": [{ "file": ".github/workflows/ci.yml", "event": "pull_request" }]
+  },
+  "li-cursor-agents": {
+    "workflows": [{ "file": ".github/workflows/ci.yml", "event": "workflow_dispatch" }]
+  },
+  "benchmarks": {
+    "workflows": [{ "file": ".github/workflows/ci.yml", "event": "pull_request" }]
+  },
+  "lip": {
+    "workflows": [{ "file": ".github/workflows/ci.yml", "event": "pull_request" }]
+  },
+  "lit": {
+    "workflows": [{ "file": ".github/workflows/ci.yml", "event": "pull_request" }]
+  },
+  "lis": {
+    "workflows": [{ "file": ".github/workflows/ci.yml", "event": "pull_request" }]
+  },
+  "roadmap": {
+    "workflows": [{ "file": ".github/workflows/ci.yml", "event": "pull_request" }]
+  },
+  "li-language": {
+    "workflows": [{ "file": ".github/workflows/ci.yml", "event": "pull_request" }]
+  }
+}
