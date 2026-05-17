@@ -1,101 +1,92 @@
 # li-local-ci
 
-Local CI for the Li ecosystem — run the same checks as GitHub Actions **on your machine** using small Docker images (or the host for heavy LLVM builds). Built to **save GHA minutes** and keep disk usage under control.
+Local CI for the Li ecosystem — run **the same GitHub Actions workflow YAML** as cloud CI on your machine, using [nektos/act](https://github.com/nektos/act). Built to **save GHA minutes** and keep merge gates honest when `statusCheckRollup` is red or skipped.
+
+## YAML-first (default)
+
+1. Clone PR branch (`run-pr`) or use a local checkout (`workflows`)
+2. **Discover** `.github/workflows/*.yml` (or read `config/repo-workflows.json`)
+3. **Run** each selected workflow with `act` and the right event (`pull_request`, `workflow_dispatch`, …)
+4. Write result to `benchmarks/data/latest/local-ci-results.json` for `pr-merge-gate.py`
+
+Shell **profiles** (`profiles/*.sh`) remain as **fallback** when `act` is missing or you pass `--profile legacy`.
+
+### Install act
+
+```bash
+brew install act
+./bin/li-local-ci doctor   # should show act version
+```
+
+First run pulls runner images (`catthehacker/ubuntu:act-22.04`, …). Override:
+
+```bash
+export LI_LOCAL_CI_ACT_PLATFORMS="-P ubuntu-24.04=catthehacker/ubuntu:act-22.04"
+```
 
 ## Agent swarm / merge queue (GHA quota)
 
-When GitHub Actions minutes are exhausted, the **li-cursor-agents** supervisor runs:
+When GitHub Actions minutes are exhausted, **li-cursor-agents** supervisor runs:
 
-1. `benchmarks/scripts/local-ci-sweep.py` on merge-candidate PRs (`merge-approved`, GHA not green)
-2. `li-local-ci run-pr` clones the PR branch and runs the repo profile
+1. `benchmarks/scripts/local-ci-sweep.py` on merge-candidate PRs
+2. `li-local-ci run-pr` → **workflows on the PR branch** (not org-wide YAML)
 3. `pr-merge-gate.py` accepts **local-ci pass** instead of `statusCheckRollup` green
-4. `run-pr-program.py` refreshes so `agent-briefing.json` / merge plan see updated `ci_green`
-
-Disable: `LI_USE_LOCAL_CI=0` or `LI_SKIP_LOCAL_CI_SWEEP=1` on the dashboard/supervisor process.
 
 ```bash
-# Manual single PR
-./bin/li-local-ci run-pr --repo li-cursor-agents --pr 2 --out ../benchmarks/data/latest/local-ci-results.json
-python3 ../benchmarks/scripts/pr-merge-gate.py --repo li-cursor-agents --pr 2
+# Single PR — runs that repo's CI workflow YAML via act
+./bin/li-local-ci run-pr --repo li-cursor-agents --pr 2
+
+# Explicit workflow + event
+./bin/li-local-ci run-pr --repo lic --pr 14 --workflow .github/workflows/ci.yml --event pull_request
+
+# Local checkout (no gh clone)
+./bin/li-local-ci workflows --repo ../li-cursor-agents
+
+# Legacy shell profile (no act)
+./bin/li-local-ci run-pr --repo li-cursor-agents --pr 2 --profile legacy
 ```
 
-## Quick start
+Disable swarm sweep: `LI_USE_LOCAL_CI=0` on the dashboard/supervisor.
 
-```bash
-cd li-local-ci
-./scripts/build-images.sh          # once: ~150MB node image
-./scripts/prune.sh                 # free disk before/after runs
+## Config
 
-# li-cursor-agents (Node, mock agents — matches GHA ci.yml)
-./bin/li-local-ci run li-cursor-agents --repo ../li-cursor-agents
+| File | Purpose |
+|------|---------|
+| `config/repo-workflows.json` | Per-repo default workflow + event when discovery is ambiguous |
+| `config/act.env` | Non-secret env passed to all act runs (`CURSOR_MOCK=1`, …) |
 
-# lic compiler (uses host toolchain — no multi-GB LLVM image unless you opt in)
-./bin/li-local-ci run lic-host --repo ../li
-```
+Discovery skips workflows whose names match `release`, `notify`, `upstream`, etc. Use `--all-pr-workflows` to run every `pull_request` workflow in a repo.
 
-From **li-cursor-agents**:
+## Profiles (fallback / fast loop)
 
-```bash
-npm run ci:local
-```
+| Profile | Where | Use for |
+|---------|-------|---------|
+| `li-cursor-agents-host` | Host | Full tests without act |
+| `li-cursor-agents-quick` | Docker | Unit tests only |
+| `lic-host` | Host | `./scripts/ci.sh` |
 
-## Profiles
-
-| Profile | Where it runs | Use for |
-|---------|---------------|---------|
-| `li-cursor-agents-host` | Host | Full GHA parity (`npm test` + `test:e2e`) — **default for agents** |
-| `li-cursor-agents` | Docker `li-local-ci/node:22` | Same steps in container (e2e may need `BENCHMARKS_ROOT`) |
-| `li-cursor-agents-quick` | Docker | Unit tests only (fast) |
-| `lic-host` | Host (no container) | `./scripts/ci.sh` when LLVM/cmake installed locally |
-| `lic-docker` | Docker `li-local-ci/lic:llvm18` | Full lic CI in container (large image — opt-in) |
-
-List profiles: `./bin/li-local-ci list`
+List: `./bin/li-local-ci list`
 
 ## Disk safety
 
-- **`scripts/prune.sh`** — removes exited containers and dangling images (not your tagged `li-local-ci/*` images).
-- Runs use **`docker run --rm`** so containers are not left behind.
-- Set **`LI_LOCAL_CI_PRUNE=always`** (default) to prune after each run; `never` to skip.
-- **`./bin/li-local-ci doctor`** — Docker disk summary + free space warning.
-
-Avoid `docker system prune -a` unless you mean it — it deletes all unused images.
-
-## GitHub Actions quota
-
-Point PR CI to local runs:
-
-1. In each repo, narrow GHA triggers (e.g. `workflow_dispatch` only on `li-cursor-agents`) — see that repo’s workflow.
-2. Run `./bin/li-local-ci run <profile>` before push.
-3. Optional: add a PR label `run-gha` to re-enable cloud CI when needed.
-
-## Opt-in LLVM Docker image
-
-Only if you have ~4GB+ free and want lic CI fully containerized:
-
-```bash
-LI_LOCAL_CI_BUILD_LIC=1 ./scripts/build-images.sh
-./bin/li-local-ci run lic-docker --repo ../li
-```
+- `docker run --rm` for profile mode; act manages its own containers
+- `./scripts/prune.sh` — safe prune after runs
+- `./bin/li-local-ci doctor` — disk + act check
 
 ## Layout
 
 ```
-bin/li-local-ci          CLI entry
-lib/runner.sh            profile dispatcher
-lib/docker.sh            container run + prune helpers
-profiles/*.sh            job steps (shell)
-docker/node-22/          slim Node 22 image
-docker/lic-llvm18/       optional LLVM 18 (Ubuntu)
-scripts/build-images.sh
-scripts/prune.sh
-scripts/doctor.sh
+bin/li-local-ci
+lib/act-runner.sh          # act invocation
+lib/discover_workflows.py  # YAML on: → event
+lib/workflow-run.sh        # discover + run
+lib/run-pr.sh              # clone PR + workflows
+config/repo-workflows.json
+config/act.env
+profiles/*.sh              # legacy shell CI
 ```
 
-## Agent / pre-push
+## Limitations
 
-```bash
-# In li-cursor-agents or lic before push
-../li-local-ci/bin/li-local-ci run li-cursor-agents --repo .
-```
-
-License: Apache-2.0 (li-langverse)
+- **Not every GHA feature works in act** (services, caches, some actions). Heavy workflows (lic + sibling checkouts) may need `LI_LOCAL_CI_BINDS` or host `lic-host` profile.
+- Workflows must exist **on the PR branch** — that is the point: local CI matches what you merge.

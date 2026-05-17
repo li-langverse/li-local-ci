@@ -16,6 +16,12 @@ main() {
       source "$ROOT/lib/run-pr.sh"
       cmd_run_pr "$@"
       ;;
+    workflows)
+      shift
+      # shellcheck source=../lib/workflow-run.sh
+      source "$ROOT/lib/workflow-run.sh"
+      cmd_run_workflows "$@"
+      ;;
     list)
       cmd_list
       ;;
@@ -35,7 +41,12 @@ main() {
       echo ""
       echo "Usage:"
       echo "  li-local-ci run <profile> [--repo PATH] [--no-prune] [--dry-run]"
+      echo "  li-local-ci run-pr --repo NAME --pr N [--workflow FILE --event EVENT] [--profile workflows|legacy]"
+      echo "  li-local-ci workflows --repo PATH [--workflow FILE --event EVENT] [--all-pr-workflows]"
       echo "  li-local-ci list | doctor | build-images | prune"
+      echo ""
+      echo "Default run-pr mode: execute .github/workflows/*.yml via act (brew install act)."
+      echo "Legacy shell profiles: --profile li-cursor-agents-host (etc.)"
       ;;
     *)
       echo "Unknown command: $1 (try --help)" >&2

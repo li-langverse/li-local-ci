@@ -10,21 +10,26 @@ source "$LI_LOCAL_CI_ROOT/lib/docker.sh"
 source "$LI_LOCAL_CI_ROOT/lib/repo-profile.sh"
 # shellcheck source=runner.sh
 source "$LI_LOCAL_CI_ROOT/lib/runner.sh"
+# shellcheck source=workflow-run.sh
+source "$LI_LOCAL_CI_ROOT/lib/workflow-run.sh"
 
 cmd_run_pr() {
-  local repo="" pr="" profile="" out="" keep=0
+  local repo="" pr="" profile="" out="" keep=0 workflow="" event="" all_pr=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --repo) repo="$2"; shift 2 ;;
       --pr) pr="$2"; shift 2 ;;
       --profile) profile="$2"; shift 2 ;;
+      --workflow) workflow="$2"; shift 2 ;;
+      --event) event="$2"; shift 2 ;;
+      --all-pr-workflows) all_pr=1; shift ;;
       --out) out="$2"; shift 2 ;;
       --keep-workspace) keep=1; shift ;;
       *) echo "Unknown: $1" >&2; exit 1 ;;
     esac
   done
   [[ -n "$repo" && -n "$pr" ]] || {
-    echo "Usage: li-local-ci run-pr --repo <name> --pr <number> [--profile auto] [--out file.json]" >&2
+    echo "Usage: li-local-ci run-pr --repo <name> --pr <number> [--profile workflows|legacy] [--workflow FILE] [--out file.json]" >&2
     exit 1
   }
   if ! command -v gh >/dev/null 2>&1; then
@@ -45,19 +50,34 @@ cmd_run_pr() {
   )
 
   if [[ -z "$profile" || "$profile" == "auto" ]]; then
-    profile="$(resolve_repo_profile "$repo" "$work")"
+    profile="workflows"
   fi
-  if [[ -z "$profile" ]]; then
-    echo "No profile for repo $repo" >&2
-    exit 1
-  fi
-  echo "==> profile $profile" >&2
+  echo "==> mode $profile" >&2
 
-  local started finished rc=0
+  local started finished rc=0 runner_note=""
   started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   set +e
-  cmd_run "$profile" --repo "$work" --no-prune
-  rc=$?
+  if [[ "$profile" == "legacy" || "$profile" == "profile" ]]; then
+    profile="$(resolve_repo_profile "$repo" "$work")"
+    [[ -n "$profile" ]] || {
+      echo "No profile for repo $repo" >&2
+      exit 1
+    }
+    echo "==> legacy profile $profile" >&2
+    cmd_run "$profile" --repo "$work" --no-prune
+    rc=$?
+  elif [[ "$profile" == "workflows" ]]; then
+    local -a wf_flags=(--repo "$work" --repo-name "$repo")
+    [[ -n "$workflow" ]] && wf_flags+=(--workflow "$workflow" --event "${event:-pull_request}")
+    [[ "$all_pr" == 1 ]] && wf_flags+=(--all-pr-workflows)
+    cmd_run_workflows "${wf_flags[@]}" --no-prune
+    rc=$?
+    profile="workflows"
+  else
+    echo "==> legacy profile $profile" >&2
+    cmd_run "$profile" --repo "$work" --no-prune
+    rc=$?
+  fi
   set -e
   finished="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
