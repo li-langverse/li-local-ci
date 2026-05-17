@@ -46,7 +46,11 @@ cmd_run_pr() {
   gh repo clone "li-langverse/${repo}" "$work" -- --depth 50
   (
     cd "$work"
-    gh pr checkout "$pr" --force
+    if ! gh pr checkout "$pr" --force 2>/dev/null; then
+      echo "==> gh pr checkout failed; using fetch pull/${pr}/head" >&2
+      git fetch origin "pull/${pr}/head:li-local-ci-pr-${pr}"
+      git checkout "li-local-ci-pr-${pr}"
+    fi
   )
 
   if [[ -z "$profile" || "$profile" == "auto" ]]; then
