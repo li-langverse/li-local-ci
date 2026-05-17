@@ -28,12 +28,9 @@ default_act_platforms() {
     echo "$extra"
     return
   fi
+  # Primary mapping for li-langverse workflows (ubuntu-24.04). Extra -P entries can confuse act 0.2.x on arm64.
   echo "-P ubuntu-24.04=catthehacker/ubuntu:act-22.04"
-  echo "-P ubuntu-latest=catthehacker/ubuntu:act-latest"
-  echo "-P ubuntu-22.04=catthehacker/ubuntu:act-22.04"
-  if [[ "$(uname -m)" == "arm64" && -z "${LI_LOCAL_CI_ACT_ARCH:-}" ]]; then
-    echo "--container-architecture linux/amd64"
-  fi
+  echo "-P ubuntu-latest=catthehacker/ubuntu:act-22.04"
 }
 
 # Run one workflow file with act; repo_abs = checkout root.
@@ -46,10 +43,11 @@ run_workflow_act() {
 
   local act
   act="$(act_bin)"
-  local -a plat=()
-  while IFS= read -r line; do
-    [[ -n "$line" ]] && plat+=("$line")
-  done < <(default_act_platforms)
+  local -a plat=(-P ubuntu-24.04=catthehacker/ubuntu:act-22.04 -P ubuntu-latest=catthehacker/ubuntu:act-22.04)
+  if [[ -n "${LI_LOCAL_CI_ACT_PLATFORMS:-}" ]]; then
+    # Optional override: " -P ubuntu-24.04=... -P ubuntu-latest=..."
+    read -r -a plat <<< "${LI_LOCAL_CI_ACT_PLATFORMS}"
+  fi
 
   local wf_path="$repo_abs/$workflow_file"
   if [[ ! -f "$wf_path" ]]; then
@@ -60,15 +58,23 @@ run_workflow_act() {
   echo "==> act event=$event workflow=$workflow_file repo=$repo_abs" >&2
 
   local -a env_file=()
-  if [[ -f "$LI_LOCAL_CI_ROOT/config/act.env" ]]; then
+  if [[ "${LI_LOCAL_CI_ACT_SKIP_ENV_FILE:-}" != "1" ]] && [[ -f "$LI_LOCAL_CI_ROOT/config/act.env" ]]; then
     env_file=(--env-file "$LI_LOCAL_CI_ROOT/config/act.env")
   fi
 
-  local -a act_args=("${plat[@]}" --rm "${env_file[@]}")
+  # Flag order matters for act 0.2.x: -P then --container-architecture then --rm.
+  local -a act_args=("${plat[@]}")
+  if [[ "$(uname -m)" == "arm64" ]]; then
+    act_args+=(--container-architecture "${LI_LOCAL_CI_ACT_ARCH:-linux/amd64}")
+  fi
+  act_args+=(--rm)
   if [[ -n "$event" ]]; then
     act_args=("$event" -W "$workflow_file" "${act_args[@]}")
   else
     act_args=(-W "$workflow_file" --detect-event "${act_args[@]}")
+  fi
+  if [[ ${#env_file[@]} -gt 0 ]]; then
+    act_args+=("${env_file[@]}")
   fi
 
   # Common Li ecosystem env (matches GHA + profiles). Note: act -e is eventpath, not env.
@@ -76,7 +82,14 @@ run_workflow_act() {
     --env "CURSOR_MOCK=${CURSOR_MOCK:-1}"
     --env "CI=true"
   )
-  if [[ -n "${BENCHMARKS_ROOT:-}" ]]; then
+  local bench="${BENCHMARKS_ROOT:-}"
+  if [[ -z "$bench" && -d "$repo_abs/../benchmarks" ]]; then
+    bench="$(cd "$repo_abs/../benchmarks" && pwd)"
+  fi
+  if [[ -n "$bench" && -d "$bench" && "${LI_LOCAL_CI_ACT_MOUNT_BENCHMARKS:-1}" == "1" ]]; then
+    act_args+=(--env "BENCHMARKS_ROOT=/benchmarks")
+    act_args+=(--container-options="--volume=${bench}:/benchmarks")
+  elif [[ -n "${BENCHMARKS_ROOT:-}" ]]; then
     act_args+=(--env "BENCHMARKS_ROOT=$BENCHMARKS_ROOT")
   fi
   if [[ -n "${GH_TOKEN:-}" ]]; then
@@ -98,7 +111,19 @@ run_workflow_act() {
   if [[ "${LI_LOCAL_CI_ACT_VERBOSE:-}" == "1" ]]; then
     echo "[act] cd $repo_abs && $act ${act_args[*]}" >&2
   fi
-  (cd "$repo_abs" && "$act" "${act_args[@]}")
+  local log
+  log="$(mktemp "${TMPDIR:-/tmp}/li-local-ci-act.XXXXXX.log")"
+  set +e
+  (cd "$repo_abs" && "$act" "${act_args[@]}" >"$log" 2>&1)
+  local rc=$?
+  set -e
+  tail -40 "$log" >&2
+  if grep -q "Skipping unsupported platform" "$log" && ! grep -q "⭐ Run Main" "$log"; then
+    echo "ERROR: act skipped job (fix -P platform map or pull catthehacker/ubuntu:act-22.04)" >&2
+    rc=1
+  fi
+  rm -f "$log"
+  return "$rc"
 }
 
 # Discover + run all configured/discovered workflows; returns 0 if all pass.
