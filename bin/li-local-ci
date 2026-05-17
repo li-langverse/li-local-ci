@@ -10,6 +10,12 @@ main() {
       shift
       cmd_run "$@"
       ;;
+    run-pr)
+      shift
+      # shellcheck source=../lib/run-pr.sh
+      source "$ROOT/lib/run-pr.sh"
+      cmd_run_pr "$@"
+      ;;
     list)
       cmd_list
       ;;

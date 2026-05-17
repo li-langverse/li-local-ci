@@ -2,6 +2,23 @@
 
 Local CI for the Li ecosystem — run the same checks as GitHub Actions **on your machine** using small Docker images (or the host for heavy LLVM builds). Built to **save GHA minutes** and keep disk usage under control.
 
+## Agent swarm / merge queue (GHA quota)
+
+When GitHub Actions minutes are exhausted, the **li-cursor-agents** supervisor runs:
+
+1. `benchmarks/scripts/local-ci-sweep.py` on merge-candidate PRs (`merge-approved`, GHA not green)
+2. `li-local-ci run-pr` clones the PR branch and runs the repo profile
+3. `pr-merge-gate.py` accepts **local-ci pass** instead of `statusCheckRollup` green
+4. `run-pr-program.py` refreshes so `agent-briefing.json` / merge plan see updated `ci_green`
+
+Disable: `LI_USE_LOCAL_CI=0` or `LI_SKIP_LOCAL_CI_SWEEP=1` on the dashboard/supervisor process.
+
+```bash
+# Manual single PR
+./bin/li-local-ci run-pr --repo li-cursor-agents --pr 2 --out ../benchmarks/data/latest/local-ci-results.json
+python3 ../benchmarks/scripts/pr-merge-gate.py --repo li-cursor-agents --pr 2
+```
+
 ## Quick start
 
 ```bash
