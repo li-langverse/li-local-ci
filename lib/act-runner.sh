@@ -79,6 +79,7 @@ run_workflow_act() {
 
   # Common Li ecosystem env (matches GHA + profiles). Note: act -e is eventpath, not env.
   act_args+=(
+    --env "ACT=${ACT:-true}"
     --env "CURSOR_MOCK=${CURSOR_MOCK:-1}"
     --env "CI=true"
   )

@@ -7,9 +7,11 @@ Local CI for the Li ecosystem — run **the same GitHub Actions workflow YAML** 
 1. Clone PR branch (`run-pr`) or use a local checkout (`workflows`)
 2. **Discover** `.github/workflows/*.yml` (or read `config/repo-workflows.json`)
 3. **Run** each selected workflow with `act` and the right event (`pull_request`, `workflow_dispatch`, …)
-4. Write result to `benchmarks/data/latest/local-ci-results.json` for `pr-merge-gate.py`
+4. Write result to `benchmarks/data/latest/local-ci-results.json` for `pr-merge-gate.py` (**always**, including `ok: false` on failure)
 
 Shell **profiles** (`profiles/*.sh`) remain as **fallback** when `act` is missing or you pass `--profile legacy`.
+
+**act + e2e:** `li-cursor-agents` CI runs unit tests only under act (`ACT=true`); swarm-handoff e2e needs host/GHA (`npm run ci:local` or full GHA). Merge gate treats failed local-ci rows as blocking (`ok: false`).
 
 ### Install act
 
