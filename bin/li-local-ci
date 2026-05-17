@@ -14,7 +14,11 @@ main() {
       shift
       # shellcheck source=../lib/run-pr.sh
       source "$ROOT/lib/run-pr.sh"
+      set +e
       cmd_run_pr "$@"
+      ec=$?
+      set -e
+      exit "$ec"
       ;;
     workflows)
       shift
