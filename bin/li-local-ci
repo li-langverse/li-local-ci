@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../lib/runner.sh
+source "$ROOT/lib/runner.sh"
+
+main() {
+  case "${1:-}" in
+    run)
+      shift
+      cmd_run "$@"
+      ;;
+    list)
+      cmd_list
+      ;;
+    doctor)
+      cmd_doctor
+      ;;
+    build-images)
+      shift
+      exec "$ROOT/scripts/build-images.sh" "$@"
+      ;;
+    prune)
+      shift
+      exec "$ROOT/scripts/prune.sh" "$@"
+      ;;
+    -h | --help | help | "")
+      sed -n '1,80p' "$ROOT/README.md"
+      echo ""
+      echo "Usage:"
+      echo "  li-local-ci run <profile> [--repo PATH] [--no-prune] [--dry-run]"
+      echo "  li-local-ci list | doctor | build-images | prune"
+      ;;
+    *)
+      echo "Unknown command: $1 (try --help)" >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

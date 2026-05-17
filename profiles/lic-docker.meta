@@ -1,0 +1,2 @@
+LI_LOCAL_CI_MODE=docker
+LI_LOCAL_CI_IMAGE=lic:llvm18
