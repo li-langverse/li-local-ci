@@ -26,6 +26,10 @@ First run pulls runner images (`catthehacker/ubuntu:act-22.04`, …). Override:
 export LI_LOCAL_CI_ACT_PLATFORMS="-P ubuntu-24.04=catthehacker/ubuntu:act-22.04"
 ```
 
+## Agent skill
+
+Cursor agents: skill **`run-local-ci-gha-quota`** (in this repo under `.cursor/skills/` and synced from **roadmap/agent-kit**). Use when GHA minutes are exhausted.
+
 ## Agent swarm / merge queue (GHA quota)
 
 When GitHub Actions minutes are exhausted, **li-cursor-agents** supervisor runs:
