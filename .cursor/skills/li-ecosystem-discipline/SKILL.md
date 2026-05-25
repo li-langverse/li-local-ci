@@ -36,6 +36,7 @@ Use when work spans **`lic`**, **`lip`**, **`lit`**, **`lis`**, or official **`l
 - `create-li-package` — new packages
 - `build-li-master-plan` — compiler phases
 - `write-li-release-notes` — before every merge-worthy PR
+- `run-local-ci-gha-quota` — when GHA minutes are exhausted; use **li-local-ci** before merge
 
 ## Do not
 
