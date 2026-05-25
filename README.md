@@ -1,5 +1,7 @@
 # li-local-ci
 
+*Local GitHub Actions CI for Li (act) — HPC merge gates and AI agent workflows when GHA quota is tight.*
+
 Local CI for the Li ecosystem — run **the same GitHub Actions workflow YAML** as cloud CI on your machine, using [nektos/act](https://github.com/nektos/act). Built to **save GHA minutes** and keep merge gates honest when `statusCheckRollup` is red or skipped.
 
 ## YAML-first (default)
