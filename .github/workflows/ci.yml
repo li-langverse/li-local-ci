@@ -1,0 +1,67 @@
+# Official package mirror CI — required for every li-langverse package repo.
+# Copied by: ./scripts/li-new-package --official  and  ./scripts/ensure-package-ci.sh
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/checkout@v6
+        with:
+          repository: li-langverse/lic
+          path: lic
+          ref: main
+
+      - name: Enforce def syntax (no bare proc)
+        run: |
+          set -euo pipefail
+          chmod +x lic/scripts/check-li-def-syntax.sh
+          # Package tree only — lic checkout includes compile_fail proc tests.
+          lic/scripts/check-li-def-syntax.sh src
+          if [[ -d li-tests ]]; then
+            lic/scripts/check-li-def-syntax.sh li-tests
+          fi
+
+      - name: Install LLVM 18
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang-18 llvm-18-dev zlib1g-dev libzstd-dev python3
+
+      - name: Build lic
+        working-directory: lic
+        env:
+          LLVM_DIR: /usr/lib/llvm-18/lib/cmake/llvm
+          CC: clang-18
+          CXX: clang++-18
+        run: |
+          chmod +x scripts/build.sh scripts/resolve-lic.sh 2>/dev/null || chmod +x scripts/build.sh
+          ./scripts/build.sh
+
+      - name: lic check + smoke
+        env:
+          LIC: ${{ github.workspace }}/lic/build/compiler/lic/lic
+        run: |
+          test -x "$LIC"
+          if [[ -f src/lib.li ]]; then
+            "$LIC" check src/lib.li
+          elif [[ -f src/main.li ]]; then
+            "$LIC" check src/main.li
+          else
+            echo "no src/lib.li or src/main.li"
+            exit 1
+          fi
+          if [[ -f li-tests/smoke/builds.li ]]; then
+            "$LIC" build li-tests/smoke/builds.li -o /dev/null
+          fi
